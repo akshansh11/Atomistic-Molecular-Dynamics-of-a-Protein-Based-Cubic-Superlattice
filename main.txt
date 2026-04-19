@@ -1,0 +1,53 @@
+# Download ubiquitin (or replace 1ubq with your PDB ID)
+wget https://files.rcsb.org/download/1UBQ.pdb
+
+# Convert PDB → GROMACS format (choose AMBER99SB forcefield = option 1)
+gmx pdb2gmx -f 1UBQ.pdb -o protein.gro -water spce -ff amber99sb -ignh
+
+# Put protein in a box with 1.2nm padding
+gmx editconf -f protein.gro -o protein_box.gro -bt cubic -d 1.2 -c
+
+# This is the KEY command — makes a 3x3x3 lattice = 27 protein copies
+gmx genconf -f protein_box.gro -o lattice.gro -nbox 3 3 3
+
+# Convert .gro back to PDB for PyMOL
+gmx editconf -f lattice.gro -o lattice.pdb
+
+cat > minim.mdp << EOF
+integrator      = steep
+emtol           = 1000.0
+nsteps          = 50000
+cutoff-scheme   = Verlet
+nstlist         = 10
+rcoulomb        = 1.0
+rvdw            = 1.0
+pbc             = xyz
+EOF
+
+gmx grompp -f minim.mdp -c lattice.gro -p topol.top -o em.tpr -maxwarn 5
+
+gmx mdrun -v -deffnm em
+
+# Convert minimized structure to PDB
+gmx editconf -f em.gro -o lattice_final.pdb
+
+# Open PyMOL, then type these commands inside PyMOL:
+# Load the final lattice
+load lattice_final.pdb
+
+# Color each protein copy differently
+util.cbc
+
+# Show as cartoon (helices + sheets visible)
+hide everything
+show cartoon
+
+# Nice rendering
+set cartoon_fancy_helices, 1
+bg_color white
+
+# Zoom to fit everything
+zoom
+
+# Save image
+png lattice_BCC.png, width=1200, height=900, dpi=150
